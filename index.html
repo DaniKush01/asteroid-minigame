@@ -5,181 +5,163 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Tempesta di Asteroidi</title>
 <style>
-  body {
-    margin: 0;
-    background: black;
-    overflow: hidden;
-    touch-action: none;
-    font-family: Arial, sans-serif;
+  body { margin:0; background:black; overflow:hidden; font-family:Arial; touch-action:none; }
+  #menu, #gameover {
+    position:absolute; inset:0; background:rgba(0,0,0,0.9); color:white;
+    display:flex; align-items:center; justify-content:center; flex-direction:column; z-index:30;
   }
-
-  #game {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
-    background: radial-gradient(circle at top, #111 0%, #000 70%);
-  }
-
+  button { padding:12px 20px; font-size:18px; margin:10px; }
+  #game { position:relative; width:100vw; height:100vh; background:radial-gradient(circle at top, #111 0%, #000 70%); }
   #ship {
-    position: absolute;
-    width: 50px;
-    height: 50px;
-    background: cyan;
-    border-radius: 10px;
-    bottom: 40px;
-    left: 50%;
-    transform: translateX(-50%);
-    box-shadow: 0 0 15px cyan;
+    position:absolute; width:50px; height:50px; background:cyan; border-radius:10px;
+    box-shadow:0 0 15px cyan;
   }
-
-  .asteroid {
-    position: absolute;
-    width: 40px;
-    height: 40px;
-    background: gray;
-    border-radius: 50%;
-    box-shadow: inset -5px -5px 10px rgba(0,0,0,0.6);
-  }
-
-  #ui {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    color: white;
-    font-size: 18px;
-    z-index: 10;
-  }
-
-  #gameover {
-    position: absolute;
-    inset: 0;
-    background: rgba(0,0,0,0.8);
-    color: white;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    font-size: 24px;
-    z-index: 20;
-  }
-
-  button {
-    margin-top: 20px;
-    padding: 10px 20px;
-    font-size: 18px;
-  }
+  .shield { box-shadow:0 0 25px 10px rgba(0,200,255,0.7); }
+  .asteroid { position:absolute; width:40px; height:40px; background:gray; border-radius:50%; }
+  .explosive { background: orange; box-shadow:0 0 15px orange; }
+  #ui { position:absolute; top:10px; left:10px; color:white; z-index:10; }
 </style>
 </head>
 <body>
 
-<div id="game">
-  <div id="ui">Tempo: <span id="time">0</span>s</div>
-  <div id="ship"></div>
-  <div id="gameover">
-    <div id="result"></div>
-    <button onclick="restart()">Riprova</button>
-  </div>
+<div id="menu">
+  <h2>Quanti piloti ci sono?</h2>
+  <button onclick="startGame(1)">1 Pilota</button>
+  <button onclick="startGame(2)">2 Piloti (Co-op)</button>
 </div>
 
+<div id="game" style="display:none;">
+  <div id="ui">
+    ⏱️ <span id="time">0</span>/180s | ❤️ <span id="lives">3</span> | 🛡️ Scudi: <span id="shieldStatus">OFF</span>
+  </div>
+  <div id="ship"></div>
+</div>
+
+<div id="gameover" style="display:none;">
+  <h2 id="result"></h2>
+  <button onclick="location.reload()">Rigioca</button>
+</div>
+
+<audio id="music" loop>
+  <source src="https://cdn.pixabay.com/download/audio/2022/10/26/audio_0c8f8b8a8a.mp3?filename=sci-fi-ambient-110602.mp3" type="audio/mpeg">
+</audio>
+
 <script>
-  const game = document.getElementById("game");
-  const ship = document.getElementById("ship");
-  const timeEl = document.getElementById("time");
-  const gameoverEl = document.getElementById("gameover");
-  const resultEl = document.getElementById("result");
+let pilots = 1;
+let timeSurvived = 0;
+let lives = 3;
+let asteroids = [];
+let running = false;
+let shieldsOn = false;
 
-  let shipX = window.innerWidth / 2 - 25;
-  let timeSurvived = 0;
-  let asteroids = [];
-  let running = true;
+const game = document.getElementById("game");
+const ship = document.getElementById("ship");
+const timeEl = document.getElementById("time");
+const livesEl = document.getElementById("lives");
+const shieldStatus = document.getElementById("shieldStatus");
+const music = document.getElementById("music");
 
-  function spawnAsteroid() {
-    const a = document.createElement("div");
-    a.classList.add("asteroid");
-    a.style.left = Math.random() * (window.innerWidth - 40) + "px";
-    a.style.top = "-50px";
-    game.appendChild(a);
+let shipX = window.innerWidth/2;
+let shipY = window.innerHeight - 120;
 
-    asteroids.push({
-      el: a,
-      x: parseFloat(a.style.left),
-      y: -50,
-      speed: 2 + Math.random() * 3
-    });
-  }
-
-  function update() {
-    if (!running) return;
-
-    asteroids.forEach((a, i) => {
-      a.y += a.speed;
-      a.el.style.top = a.y + "px";
-
-      const shipRect = ship.getBoundingClientRect();
-      const astRect = a.el.getBoundingClientRect();
-
-      if (
-        shipRect.left < astRect.right &&
-        shipRect.right > astRect.left &&
-        shipRect.top < astRect.bottom &&
-        shipRect.bottom > astRect.top
-      ) {
-        endGame(false);
-      }
-
-      if (a.y > window.innerHeight) {
-        game.removeChild(a.el);
-        asteroids.splice(i, 1);
-      }
-    });
-
-    requestAnimationFrame(update);
-  }
-
-  function endGame(victory) {
-    running = false;
-    gameoverEl.style.display = "flex";
-    resultEl.textContent = victory
-      ? "Tempesta superata! 🚀"
-      : "Colpiti dagli asteroidi! 💥";
-  }
-
-  function restart() {
-    asteroids.forEach(a => game.removeChild(a.el));
-    asteroids = [];
-    timeSurvived = 0;
-    timeEl.textContent = 0;
-    gameoverEl.style.display = "none";
-    running = true;
-    update();
-  }
-
-  setInterval(() => {
-    if (!running) return;
-    spawnAsteroid();
-  }, 700);
-
-  setInterval(() => {
-    if (!running) return;
-    timeSurvived++;
-    timeEl.textContent = timeSurvived;
-    if (timeSurvived >= 25) {
-      endGame(true);
-    }
-  }, 1000);
-
-  game.addEventListener("touchmove", (e) => {
-    const touch = e.touches[0];
-    shipX = touch.clientX - 25;
-    ship.style.left = shipX + "px";
-  });
-
-  game.addEventListener("mousemove", (e) => {
-    shipX = e.clientX - 25;
-    ship.style.left = shipX + "px";
-  });
-
+function startGame(p) {
+  pilots = p;
+  document.getElementById("menu").style.display = "none";
+  game.style.display = "block";
+  running = true;
+  music.play();
   update();
+}
+
+function spawnAsteroid() {
+  const a = document.createElement("div");
+  const explosive = pilots === 2 && Math.random() < 0.25;
+  a.className = "asteroid" + (explosive ? " explosive" : "");
+  let x = Math.random() * (window.innerWidth - 40);
+  let y = -50;
+  game.appendChild(a);
+  asteroids.push({ el:a, x, y, vy: 2 + Math.random()*3, explosive });
+}
+
+function update() {
+  if (!running) return;
+
+  asteroids.forEach((a, i) => {
+    a.y += a.vy;
+    a.el.style.left = a.x + "px";
+    a.el.style.top = a.y + "px";
+
+    const sr = ship.getBoundingClientRect();
+    const ar = a.el.getBoundingClientRect();
+
+    if (sr.left < ar.right && sr.right > ar.left && sr.top < ar.bottom && sr.bottom > ar.top) {
+      if (shieldsOn) {
+        if (a.explosive) {
+          lives--;
+        }
+      } else {
+        lives--;
+      }
+      livesEl.textContent = lives;
+      game.removeChild(a.el);
+      asteroids.splice(i,1);
+      if (lives <= 0) endGame(false);
+    }
+
+    if (a.y > window.innerHeight) {
+      game.removeChild(a.el);
+      asteroids.splice(i,1);
+    }
+  });
+
+  requestAnimationFrame(update);
+}
+
+setInterval(() => {
+  if (!running) return;
+  spawnAsteroid();
+}, 600);
+
+setInterval(() => {
+  if (!running) return;
+  timeSurvived++;
+  timeEl.textContent = timeSurvived;
+
+  if (timeSurvived >= 120) {
+    // difficoltà aumenta
+    spawnAsteroid();
+  }
+
+  if (timeSurvived >= 180) {
+    endGame(true);
+  }
+}, 1000);
+
+function endGame(victory) {
+  running = false;
+  document.getElementById("gameover").style.display = "flex";
+  document.getElementById("result").textContent = victory ? "Tempesta Superata! 🚀" : "Nave Distrutta! 💥";
+  music.pause();
+}
+
+game.addEventListener("touchmove", e => {
+  const t = e.touches[0];
+  ship.style.left = (t.clientX - 25) + "px";
+  ship.style.top = (t.clientY - 25) + "px";
+});
+
+game.addEventListener("mousemove", e => {
+  ship.style.left = (e.clientX - 25) + "px";
+  ship.style.top = (e.clientY - 25) + "px";
+});
+
+game.addEventListener("touchstart", e => {
+  if (pilots === 2) {
+    shieldsOn = !shieldsOn;
+    ship.classList.toggle("shield", shieldsOn);
+    shieldStatus.textContent = shieldsOn ? "ON" : "OFF";
+  }
+});
 </script>
 
 </body>
