@@ -68,23 +68,27 @@ function startGame(p) {
   pilots = p;
   document.getElementById("menu").style.display = "none";
   game.style.display = "block";
+  running = true;
+
+  // Posizione iniziale nave: in basso al centro
   const startX = window.innerWidth / 2 - 25;
   const startY = window.innerHeight - 90;
   ship.style.left = startX + "px";
   ship.style.top = startY + "px";
-  running = true;
+
   music.play();
+  startSpawning();
   update();
 }
 
 function spawnAsteroidVertical() {
-  spawnAsteroid(Math.random() * (window.innerWidth - 40), -50, 0, 2 + Math.random()*3);
+  spawnAsteroid(Math.random() * (window.innerWidth - 40), -50, 0, 2 + Math.random()*2);
 }
 
 function spawnAsteroidHorizontal() {
   const y = Math.random() * (window.innerHeight - 200) + 50;
   const fromLeft = Math.random() > 0.5;
-  spawnAsteroid(fromLeft ? -50 : window.innerWidth+50, y, fromLeft ? 3 : -3, 0);
+  spawnAsteroid(fromLeft ? -50 : window.innerWidth+50, y, fromLeft ? 2.5 : -2.5, 0);
 }
 
 function spawnAsteroid(x, y, vx, vy) {
@@ -109,7 +113,7 @@ function update() {
 
     if (sr.left < ar.right && sr.right > ar.left && sr.top < ar.bottom && sr.bottom > ar.top) {
       if (shieldsOn && !shieldCooldown) {
-        // scudo assorbe
+        // scudo assorbe e va in cooldown
         shieldsOn = false;
         shieldCooldown = true;
         ship.classList.remove("shield");
@@ -139,14 +143,25 @@ function update() {
   requestAnimationFrame(update);
 }
 
-let spawnRate = 800;
+let spawnInterval;
+function startSpawning() {
+  spawnInterval = setInterval(() => {
+    if (!running) return;
 
-setInterval(() => {
-  if (!running) return;
-  spawnAsteroidVertical();
-  if (timeSurvived >= 30) spawnAsteroidVertical();
-  if (timeSurvived >= 60) spawnAsteroidHorizontal();
-}, () => spawnRate);
+    // pochi asteroidi all'inizio
+    spawnAsteroidVertical();
+
+    // dopo 30s aumenta la pioggia
+    if (timeSurvived >= 30) {
+      spawnAsteroidVertical();
+    }
+
+    // dopo 60s arrivano quelli orizzontali
+    if (timeSurvived >= 60) {
+      spawnAsteroidHorizontal();
+    }
+  }, 1200); // ritmo iniziale più lento
+}
 
 setInterval(() => {
   if (!running) return;
@@ -176,6 +191,7 @@ game.addEventListener("touchstart", e => {
 
 function endGame(victory) {
   running = false;
+  clearInterval(spawnInterval);
   document.getElementById("gameover").style.display = "flex";
   document.getElementById("result").textContent = victory ? "Tempesta Superata! 🚀" : "Nave Distrutta! 💥";
   music.pause();
