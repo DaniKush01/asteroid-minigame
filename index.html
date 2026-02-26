@@ -68,6 +68,10 @@ function startGame(p) {
   pilots = p;
   document.getElementById("menu").style.display = "none";
   game.style.display = "block";
+  const startX = window.innerWidth / 2 - 25;
+  const startY = window.innerHeight - 90;
+  ship.style.left = startX + "px";
+  ship.style.top = startY + "px";
   running = true;
   music.play();
   update();
