@@ -17,7 +17,7 @@
     box-shadow:0 0 15px cyan;
   }
   .shield { box-shadow:0 0 25px 10px rgba(0,200,255,0.7); }
-  .asteroid { position:absolute; width:40px; height:40px; background:gray; border-radius:50%; }
+  .asteroid { position:absolute; width:35px; height:35px; background:gray; border-radius:50%; }
   .explosive { background: orange; box-shadow:0 0 15px orange; }
   #ui { position:absolute; top:10px; left:10px; color:white; z-index:10; }
 </style>
@@ -25,14 +25,16 @@
 <body>
 
 <div id="menu">
-  <h2>Quanti piloti ci sono?</h2>
+  <h2>Quanti piloti?</h2>
   <button onclick="startGame(1)">1 Pilota</button>
   <button onclick="startGame(2)">2 Piloti (Co-op)</button>
 </div>
 
 <div id="game" style="display:none;">
   <div id="ui">
-    ⏱️ <span id="time">0</span>/180s | ❤️ <span id="lives">3</span> | 🛡️ Scudi: <span id="shieldStatus">OFF</span>
+    ⏱️ <span id="time">0</span>/90s |
+    ❤️ <span id="lives">3</span> |
+    🛡️ Scudi: <span id="shieldStatus">OFF</span>
   </div>
   <div id="ship"></div>
 </div>
@@ -43,7 +45,7 @@
 </div>
 
 <audio id="music" loop>
-  <source src="https://cdn.pixabay.com/download/audio/2022/10/26/audio_0c8f8b8a8a.mp3?filename=sci-fi-ambient-110602.mp3" type="audio/mpeg">
+  <source src="https://cdn.pixabay.com/download/audio/2022/10/26/audio_0c8f8b8a8a.mp3" type="audio/mpeg">
 </audio>
 
 <script>
@@ -53,6 +55,7 @@ let lives = 3;
 let asteroids = [];
 let running = false;
 let shieldsOn = false;
+let shieldCooldown = false;
 
 const game = document.getElementById("game");
 const ship = document.getElementById("ship");
@@ -60,9 +63,6 @@ const timeEl = document.getElementById("time");
 const livesEl = document.getElementById("lives");
 const shieldStatus = document.getElementById("shieldStatus");
 const music = document.getElementById("music");
-
-let shipX = window.innerWidth/2;
-let shipY = window.innerHeight - 120;
 
 function startGame(p) {
   pilots = p;
@@ -73,20 +73,29 @@ function startGame(p) {
   update();
 }
 
-function spawnAsteroid() {
+function spawnAsteroidVertical() {
+  spawnAsteroid(Math.random() * (window.innerWidth - 40), -50, 0, 2 + Math.random()*3);
+}
+
+function spawnAsteroidHorizontal() {
+  const y = Math.random() * (window.innerHeight - 200) + 50;
+  const fromLeft = Math.random() > 0.5;
+  spawnAsteroid(fromLeft ? -50 : window.innerWidth+50, y, fromLeft ? 3 : -3, 0);
+}
+
+function spawnAsteroid(x, y, vx, vy) {
   const a = document.createElement("div");
-  const explosive = pilots === 2 && Math.random() < 0.25;
+  const explosive = pilots === 2 && Math.random() < 0.3;
   a.className = "asteroid" + (explosive ? " explosive" : "");
-  let x = Math.random() * (window.innerWidth - 40);
-  let y = -50;
   game.appendChild(a);
-  asteroids.push({ el:a, x, y, vy: 2 + Math.random()*3, explosive });
+  asteroids.push({ el:a, x, y, vx, vy, explosive });
 }
 
 function update() {
   if (!running) return;
 
   asteroids.forEach((a, i) => {
+    a.x += a.vx;
     a.y += a.vy;
     a.el.style.left = a.x + "px";
     a.el.style.top = a.y + "px";
@@ -95,20 +104,29 @@ function update() {
     const ar = a.el.getBoundingClientRect();
 
     if (sr.left < ar.right && sr.right > ar.left && sr.top < ar.bottom && sr.bottom > ar.top) {
-      if (shieldsOn) {
-        if (a.explosive) {
-          lives--;
-        }
+      if (shieldsOn && !shieldCooldown) {
+        // scudo assorbe
+        shieldsOn = false;
+        shieldCooldown = true;
+        ship.classList.remove("shield");
+        shieldStatus.textContent = "COOLDOWN";
+        setTimeout(() => {
+          shieldCooldown = false;
+          shieldStatus.textContent = "OFF";
+        }, 10000);
       } else {
         lives--;
+        livesEl.textContent = lives;
       }
-      livesEl.textContent = lives;
       game.removeChild(a.el);
       asteroids.splice(i,1);
       if (lives <= 0) endGame(false);
     }
 
-    if (a.y > window.innerHeight) {
+    if (
+      a.x < -100 || a.x > window.innerWidth + 100 ||
+      a.y > window.innerHeight + 100
+    ) {
       game.removeChild(a.el);
       asteroids.splice(i,1);
     }
@@ -117,32 +135,21 @@ function update() {
   requestAnimationFrame(update);
 }
 
+let spawnRate = 800;
+
 setInterval(() => {
   if (!running) return;
-  spawnAsteroid();
-}, 600);
+  spawnAsteroidVertical();
+  if (timeSurvived >= 30) spawnAsteroidVertical();
+  if (timeSurvived >= 60) spawnAsteroidHorizontal();
+}, () => spawnRate);
 
 setInterval(() => {
   if (!running) return;
   timeSurvived++;
   timeEl.textContent = timeSurvived;
-
-  if (timeSurvived >= 120) {
-    // difficoltà aumenta
-    spawnAsteroid();
-  }
-
-  if (timeSurvived >= 180) {
-    endGame(true);
-  }
+  if (timeSurvived >= 90) endGame(true);
 }, 1000);
-
-function endGame(victory) {
-  running = false;
-  document.getElementById("gameover").style.display = "flex";
-  document.getElementById("result").textContent = victory ? "Tempesta Superata! 🚀" : "Nave Distrutta! 💥";
-  music.pause();
-}
 
 game.addEventListener("touchmove", e => {
   const t = e.touches[0];
@@ -156,12 +163,19 @@ game.addEventListener("mousemove", e => {
 });
 
 game.addEventListener("touchstart", e => {
-  if (pilots === 2) {
+  if (pilots === 2 && !shieldCooldown) {
     shieldsOn = !shieldsOn;
     ship.classList.toggle("shield", shieldsOn);
     shieldStatus.textContent = shieldsOn ? "ON" : "OFF";
   }
 });
+
+function endGame(victory) {
+  running = false;
+  document.getElementById("gameover").style.display = "flex";
+  document.getElementById("result").textContent = victory ? "Tempesta Superata! 🚀" : "Nave Distrutta! 💥";
+  music.pause();
+}
 </script>
 
 </body>
